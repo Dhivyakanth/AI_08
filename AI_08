@@ -1,0 +1,140 @@
+import tkinter as tk
+from collections import deque
+
+# State representation
+class State:
+    def __init__(self, monkey, box, monkey_on_box, banana_taken):
+        self.monkey = monkey
+        self.box = box
+        self.monkey_on_box = monkey_on_box
+        self.banana_taken = banana_taken
+
+    def is_goal(self, banana_pos):
+        return self.monkey_on_box and self.box == banana_pos and self.monkey == banana_pos
+
+    def get_state(self):
+        return (self.monkey, self.box, self.monkey_on_box, self.banana_taken)
+
+    def __hash__(self):
+        return hash(self.get_state())
+
+    def __eq__(self, other):
+        return self.get_state() == other.get_state()
+
+    def __str__(self):
+        return f"Monkey: {self.monkey}, Box: {self.box}, On Box: {self.monkey_on_box}, Banana Taken: {self.banana_taken}"
+
+# Neighbors (possible next moves)
+def get_neighbors(state, banana_pos):
+    neighbors = []
+    directions = [(0, 1), (1, 0), (-1, 0), (0, -1)]
+
+    if state.banana_taken:
+        return neighbors
+
+    # Move monkey
+    for dx, dy in directions:
+        new_m = (state.monkey[0] + dx, state.monkey[1] + dy)
+        if 0 <= new_m[0] < 5 and 0 <= new_m[1] < 5:
+            neighbors.append((State(new_m, state.box, False, False), f"Monkey moves to {new_m}"))
+
+    # Push box
+    if state.monkey == state.box and not state.monkey_on_box:
+        for dx, dy in directions:
+            new_b = (state.box[0] + dx, state.box[1] + dy)
+            new_m = new_b
+            if 0 <= new_b[0] < 5 and 0 <= new_b[1] < 5:
+                neighbors.append((State(new_m, new_b, False, False), f"Monkey pushes box to {new_b}"))
+
+    # Climb box
+    if state.monkey == state.box and not state.monkey_on_box:
+        neighbors.append((State(state.monkey, state.box, True, False), "Monkey climbs on box"))
+
+    # Grab banana
+    if state.monkey_on_box and state.monkey == banana_pos:
+        neighbors.append((State(state.monkey, state.box, True, True), "Monkey grabs the banana"))
+
+    return neighbors
+
+# BFS Search
+def bfs(start_state, banana_pos):
+    visited = set()
+    queue = deque([(start_state, [])])
+    while queue:
+        current, path = queue.popleft()
+        if current in visited:
+            continue
+        visited.add(current)
+
+        if current.is_goal(banana_pos):
+            return path + [("Goal", str(current))]
+
+        for neighbor, action in get_neighbors(current, banana_pos):
+            queue.append((neighbor, path + [(action, str(current))]))
+
+    return []
+
+# DFS Search
+def dfs(start_state, banana_pos):
+    visited = set()
+    stack = [(start_state, [])]
+    while stack:
+        current, path = stack.pop()
+        if current in visited:
+            continue
+        visited.add(current)
+
+        if current.is_goal(banana_pos):
+            return path + [("Goal", str(current))]
+
+        for neighbor, action in reversed(get_neighbors(current, banana_pos)):
+            stack.append((neighbor, path + [(action, str(current))]))
+
+    return []
+
+# Solve and Display
+def solve(method):
+    try:
+        monkey = (int(entry_monkey_x.get()), int(entry_monkey_y.get()))
+        box = (int(entry_box_x.get()), int(entry_box_y.get()))
+        banana = (int(entry_banana_x.get()), int(entry_banana_y.get()))
+
+        start = State(monkey, box, False, False)
+        path = bfs(start, banana) if method == 'BFS' else dfs(start, banana)
+
+        output.delete('1.0', tk.END)
+        if path:
+            for action, state in path:
+                output.insert(tk.END, f"{action} → {state}\n")
+        else:
+            output.insert(tk.END, "❌ No solution found.\n")
+    except Exception as e:
+        output.delete('1.0', tk.END)
+        output.insert(tk.END, f"⚠️ Error: {e}")
+
+# --- GUI Setup ---
+root = tk.Tk()
+root.title("🐒 Monkey and Banana - AI Solver")
+root.configure(bg="#fff8dc")  # Light cream background
+label_font = ("Helvetica", 10, "bold")
+entry_width = 3
+# Input row function
+def coord_input(row, text):
+    tk.Label(root, text=text, font=label_font, fg="blue", bg="#fff8dc").grid(row=row, column=0, padx=5, pady=5, sticky="w")
+    x = tk.Entry(root, width=entry_width)
+    y = tk.Entry(root, width=entry_width)
+    x.grid(row=row, column=1, padx=3)
+    y.grid(row=row, column=2, padx=3)
+    return x, y
+entry_monkey_x, entry_monkey_y = coord_input(0, "Monkey (x y):")
+entry_box_x, entry_box_y = coord_input(1, "Box (x y):")
+entry_banana_x, entry_banana_y = coord_input(2, "Banana (x y):")
+# Buttons
+tk.Button(root, text="Solve with DFS", bg="#ff8c00", fg="white", font=("Helvetica", 10, "bold"),
+          command=lambda: solve("DFS")).grid(row=3, column=0, columnspan=1, pady=8, padx=5, sticky="ew")
+tk.Button(root, text="Solve with BFS", bg="#228b22", fg="white", font=("Helvetica", 10, "bold"),
+          command=lambda: solve("BFS")).grid(row=3, column=1, columnspan=2, pady=8, padx=5, sticky="ew")
+# Output box
+output = tk.Text(root, height=15, width=60, bg="#f5f5f5", fg="black", font=("Courier", 10))
+output.grid(row=4, column=0, columnspan=3, padx=10, pady=10)
+root.mainloop()
